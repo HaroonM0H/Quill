@@ -23,32 +23,141 @@
 <body>
     <ul id="messages"></ul>
 
-    <form id="form">
+    <form id="message-form">
         <input id="input" autocomplete="off" />
         <button>Send</button>
     </form>
+    <form id ="room-form">
+      <input id="room-input" type="text" />
+      <button type="submit">Join</button>
+    </form>
+
+    <div class="rooms-area">
+        <h2>Rooms</h2>
+        <ul class = "rooms-list" id="rooms-list">
+            <!-- list of all rooms -->
+
+        </ul>
+    </div>
 
     <script>
-        const form = document.getElementById('form');
+        const messageform = document.getElementById('message-form');
+        const roomForm = document.getElementById('room-form');
         const input = document.getElementById('input');
+        const roomInput = document.getElementById('room-input');
+        const roomList = document.getElementById('rooms-list');
+        const messagesList = document.getElementById('messages');
 
         const socket = io();
+        let currentRoom = 'general';
+        let username = 'User-' + Math.floor(Math.random() * 1000);
+        const availableRooms = ['general', 'coding', 'Jokes']
 
-        form.addEventListener('submit', e =>{
-            e.preventDefault()
+        socket.on('connect', () =>{
+            joinRoom('general');
+            socket.emit('user-joined', username);
+            populateRoomList();
+        })
 
-            if(input.value){
+        function populateRoomList(){
+                roomList.innerHTML = ''; // Fixed variable name
+                availableRooms.forEach(room =>{
+                    const item = document.createElement('li');
+                    item.textContent = room;
+                    if (room === currentRoom){
+                        item.classList.add('active');
+                    }
+                    item.addEventListener('click', () =>{ 
+                        joinRoom(room);
+                    })
+                    roomList.appendChild(item);
+                })
+        }
 
-                socket.emit('chat-message', input.value);
+        function joinRoom(room){
+            if (currentRoom){
+                messagesList.innerHTML = '';
+            }
+
+            socket.emit('join-room', room, (messages) => { // Changed roomName to room
+                currentRoom = room;
+
+                if (messages && messages.length) {
+                    messages.forEach(msg => {
+                        displayMessage(msg.content, msg.sender);
+                    })
+                }
+
+                populateRoomList();
+            })
+        }
+
+        function displayMessage(content, sender) {
+            const item = document.createElement('li');
+            item.textContent = sender + ': ' + content;
+            messagesList.appendChild(item);
+            // Scroll to the bottom
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+
+        messageform.addEventListener('submit', e => {
+            e.preventDefault();
+            
+            if (input.value) {
+                const messageContent = input.value;
+                
+                // Send message to server
+                socket.emit('send-message', {
+                    content: messageContent,
+                    to: currentRoom,
+                    sender: username,
+                    chatName: currentRoom,
+                    isChannel: true
+                });
+                
+                // Display own message
+                displayMessage(messageContent, username);
+                
+                // Clear input
                 input.value = '';
             }
-        })
+        });
 
-        socket.on('chat-message', (msg) =>{
+
+        roomForm.addEventListener('submit', e => {
+            e.preventDefault();
+            
+            if (roomInput.value) {
+                const roomName = roomInput.value;
+                
+                // Check if room exists in available rooms
+                if (!availableRooms.includes(roomName)) {
+                    // For simplicity, we're just adding it to our local list
+                    // In a real app, you might want to create it on the server
+                    availableRooms.push(roomName);
+                }
+                
+                joinRoom(roomName);
+                roomInput.value = '';
+            }
+        });
+        
+        // Listen for user joined events
+        socket.on('user-joined', (userId) =>{
             const item = document.createElement('li');
-            item.textContent = msg;
-            document.getElementById('messages').appendChild(item)
+            item.textContent = userId + ' joined the chat';
+            document.getElementById('messages').appendChild(item);
         })
+        
+        socket.on('new-message', (payload) => {
+            if (payload.chatName === currentRoom) {
+                displayMessage(payload.content, payload.sender);
+            }
+        });
+
+        socket.on('new-user', (users) => {
+            console.log('Updated users list:', users);
+        });
         
     </script>
 
