@@ -29,9 +29,19 @@ io.on('connection', socket =>{
 
     socket.on("join-room", (roomName, cb) => {
         socket.join(roomName);
+    
+        // Broadcast to everyone in the room, including the user who joined
+        io.to(roomName).emit("new-message", {
+            content: `${socket.id} has joined the room.`,
+            chatName: roomName,
+            sender: "System"
+        });
+    
+        // Send the room's message history to the user who joined
         cb(messages[roomName]);
-    })
+    });
 
+    
     socket.on("send-message", ({content, to, sender, chatName, isChannel }) => {
         if (isChannel) {
             const payload = {
